@@ -1,0 +1,11 @@
+<ivy-module version="2.0">
+  <info organisation="mashihua" module="common" revision="${version}">
+  </info>
+  <dependencies>
+   <dependency name="ant-contrib" rev="1.0b3"/>
+   <dependency org="rhino" name="js" rev="1.7R1"/>
+   <dependency org="org/jsdoctoolkit" name="jsdoctoolkit-ant-task" rev="1.0"/>
+   <dependency org="com/jcraft" name="jsch" rev="0.1.42"/>
+   <dependency org="com/jslint" name="jslint" rev="2007-10-25"/>
+  </dependencies>  
+</ivy-module>

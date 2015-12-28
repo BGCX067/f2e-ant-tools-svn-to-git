@@ -1,0 +1,569 @@
+<?xml version="1.0"?>
+<!--
+   @ author Shihua Ma
+   @content beijing.josh@gmail.com
+   @web		http://uedlife.sinaapp.com/
+   @license http://www.opensource.org/licenses/mit-license.php
+-->
+<project name="f2e-ant-tool" xmlns:ivy="antlib:org.apache.ivy.ant" default="js.validate" basedir=".">
+	
+	<property file="${basedir}/build.properties" />
+	<property file="${user.home}/build.properties" />	
+	<import file="${basedir}/dependencies.xml" />
+	
+	<property environment="env"/>
+	<property name="rhino.jar" value="${lib.dir}/js-1.7R1.jar" />
+	<property name="js.shell" value="org.mozilla.javascript.tools.shell.Main" />
+	
+	<property name="yuicompressor.jar" value="${lib.dir}/yuicompressor-${yuicompressor.version}.jar"  description="YUICompressor" />
+	<property name="compiler.jar" value="${lib.dir}/compiler.jar"  description="Google closure compiler" />
+	<property name="cssembed.jar" value="${lib.dir}/cssembed-${cssembed.version}.jar"  description="Css dataurl compiler" />
+
+	<property name="bin.dir" value="${basedir}/bin"/>
+	<property name="sed.file" value="${basedir}\temp.sed"/>
+	<!--build folder-->
+	<property name="build.dir" value="${basedir}/dest" description="Files for parsing etc." />
+	<property name="js.build.dir" value="${build.dir}/js" description="Js files for parsing etc." />
+	<property name="css.build.dir" value="${build.dir}/css" description="Css files for parsing etc." />
+	<property name="img.build.dir" value="${build.dir}/img" description="Image files for parsing etc." />
+	<property name="html.build.dir" value="${build.dir}/html" description="Html files for parsing etc." />
+
+	<!--release folder-->
+	<property name="release.dir" value="${basedir}/release" />
+	<property name="js.release.dir" value="${release.dir}/js" />
+	<property name="css.release.dir" value="${release.dir}/css" />
+	<property name="img.release.dir" value="${release.dir}/img" />
+	<property name="html.release.dir" value="${release.dir}/html" />
+
+	<property name="js.build.file" value="${js.build.dir}/${js.file.name}.js" />
+	<property name="css.build.file" value="${css.build.dir}/${css.file.name}.css" />
+
+	<property name="local.server.dir" value="../www" /> 
+	<property name="jsdoctoolkit.home" value="${basedir}/jsdoc-toolkit/" />
+		
+	<available property="build.dir.installed" file="${build.dir}"/>
+	<available property="release.dir.installed" file="${release.dir}"/>
+	<available property="image.backuped" file="${img.src.dir}/back/image.backuped"/>
+
+	<!-- copyright information -->
+	<loadfile  property="copyright" srcfile="copyright.txt">
+		<filterchain>
+			<headfilter />
+		</filterchain>
+	</loadfile>
+
+	<patternset id="sources.files">
+		<include name="**/*.html" />
+		<include name="**/*.htm" />
+		<include name="**/*.css" />
+		<include name="**/*.js" />
+	</patternset>
+
+	<patternset id="html.css.files">
+		<include name="**/*.html" />
+		<include name="**/*.htm" />
+		<include name="**/*.css" />
+	</patternset>
+
+	<patternset id="html.js.files">
+		<include name="**/*.html" />
+		<include name="**/*.htm" />
+		<include name="**/*.js" />
+	</patternset>
+
+
+	<!--ant contrib task definement-->
+	<taskdef resource="net/sf/antcontrib/antcontrib.properties">
+		<classpath>
+			<pathelement location="${lib.dir}/ant-contrib-1.0b3.jar"/>
+		</classpath>
+	</taskdef>
+
+	<!--js document toolkit task definement-->
+	<taskdef name="jsdoctoolkit" classname="uk.co.darrenhurley.ant.tasks.JsDocToolkit">
+		<classpath>
+			<pathelement location="${lib.dir}/jsdoctoolkit-ant-task-1.0.jar"/>
+			<pathelement location="${rhino.jar}"/>
+		</classpath>
+	</taskdef>
+
+	<!--smartsprites path definement-->
+	<path id="smartsprites.path">
+		<pathelement location="${lib.dir}/smartsprites-0.2.6.jar"/>
+		<pathelement location="${lib.dir}/args4j-2.0.9.jar"/>
+		<pathelement location="${lib.dir}/commons-io-1.4.jar"/>
+		<pathelement location="${lib.dir}/commons-lang-2.3.jar"/>
+		<pathelement location="${lib.dir}/commons-math-1.1.jar"/>
+		<pathelement location="${lib.dir}/google-collections-1.0-rc2.jar"/>
+	</path>
+
+	<target name="init-svn" unless="svn.revision">
+		<!--Only for version cortrol-->
+		<exec executable="svn" outputproperty="svnlog.out">
+			<arg line="info ."/>
+		</exec>
+		<propertyregex property="svn.revision" input="${svnlog.out}" select="\1">  
+			<regexp pattern="Revision: ([0-9]*)"/>  
+		</propertyregex>
+		<propertyregex property="svn.date" input="${svnlog.out}" select="\1">  
+			<regexp pattern="Date: (.+\))"/>
+		</propertyregex>
+		<property name="init-task.notrequired" value="true" />
+	</target>
+
+	<target name="init" depends="download,init-svn,build.dir">			
+	</target>
+
+	<target name="build.dir" unless="build.dir.installed">	
+		<mkdir dir="${build.dir}" />
+		<mkdir dir="${css.build.dir}" />
+		<mkdir dir="${html.build.dir}" />
+		<mkdir dir="${js.build.dir}" />
+		<mkdir dir="${img.build.dir}" />
+	</target>
+
+	<!-- js validate -->
+	<target name="js.validate" depends="init"> 
+		<echo message="Validating Source" />
+		<apply executable="java" parallel="false" failonerror="true" outputproperty="jslint.out">
+			<arg line="-jar" /> 
+			<arg path="${rhino.jar}" /> 
+			<arg path="${lib.dir}/jslint/jslint.js" />
+			<fileset dir="${js.src.dir}" includes="*.js" />
+			<srcfile /> 
+		</apply>
+		<echo>Source Validated! The jslint output is:
+${jslint.out}
+		</echo>
+	</target>
+
+	<!-- concatenates js source files -->
+	<target name="js.concat" depends="js.validate">
+		<echo  message="Building ${js.build.file}" />
+		<concat destfile="${js.build.file}" outputencoding="utf-8"> 
+			<filelist dir="${js.src.dir}" files="${js.concat.files}" />
+		</concat>
+		<!--replaceregexp match="@VERSION" replace="${svn.version}" flags="g" byline="true" file="${js.build.file}" />
+		<replaceregexp match="Date: " replace="Date: ${svn.date}" file="${js.build.file}" />
+		<replaceregexp match="Revision: " replace="Revision: ${revision}" file="${js.build.file}" /-->
+		<echo  message="${js.build.file} built." />
+	</target>
+
+	<!--compress js file using yui compressor-->
+	<target name="js.min" depends="js.concat">
+		<echo message="Building ${js.file.name}-min.js" />
+		<apply executable="java" parallel="false" failonerror="true" dest="${js.build.dir}">
+			<!--alternatively,using filelist-->
+			<fileset dir="${js.build.dir}">
+				<include name="${js.file.name}.js" />
+			</fileset>
+			<arg line="-jar"/> 
+			<arg path="${yuicompressor.jar}" /> 
+			<arg line="-o" /> 
+			<targetfile/>
+			<mapper type="glob" from="*.js" to="*-min.js" /> 
+		</apply>
+		<echo message="${js.file.name}-min.js built." /> 
+	</target>
+
+	<!--compress js file using Google closure compiler-->
+	<target name="js.compiler" depends="js.concat">
+		<echo message="Building ${js.file.name}-compiled.js" />
+		<apply executable="java" parallel="false" failonerror="true" dest="${js.build.dir}">
+			<!--alternatively,using filelist-->
+			<fileset dir="${js.build.dir}">
+				<include name="${js.file.name}.js" />
+			</fileset>
+			<arg line="-jar"/> 
+			<arg path="${compiler.jar}" /> 
+			<arg line="--js" />
+			<srcfile />
+			<arg line="--create_source_map" />
+			<arg line="${js.build.dir}/js-map" />
+			<arg line="--js_output_file" />
+			<targetfile/>
+			<mapper type="glob" from="*.js" to="*-compiled.js" /> 
+		</apply>
+		<echo message="${js.file.name}-compiled.js built." /> 
+	</target>
+
+	<!--packing js file -->
+	<target name="js.pack" depends="js.concat">
+		<echo message="Building ${js.file.name}-pack.js" />
+		<java jar="${rhino.jar}" fork="true">
+			<arg value="${lib.dir}/build/pack.js" />
+			<arg value="${js.build.file}" />
+		</java>
+		<echo message="${js.file.name}-pack.js built." />
+	</target>
+
+	<!--replace js file name in html and js file-->
+	<target name="js.replace">
+		<echo file="${sed.file}" message="s/\&lt;${js.file.name}.js/${js.file.name}-compiled.js/g${line.separator}" append="true"/>
+		<antcall target="sed.replace">
+			<param name="dest.dir" value="${build.dir}"/>
+			<param name="from.dir" value="${src.dir}"/>
+			<param name="sed.file" value="${sed.file}"/>
+			<param name="refid" value="html.js.files"/>
+		</antcall>
+	</target>
+	
+	<!--image backing up-->
+	<target name="img.backup" unless="image.backuped">
+		<mkdir dir="${img.src.dir}/back"/>
+		<copy todir="${img.src.dir}/back">
+			<fileset dir="${img.src.dir}">
+				<include name="*.png"/>
+				<include name="*.jpg"/>
+				<include name="*.jpeg"/>
+				<include name="*.gif"/>
+			</fileset>
+		</copy>
+		<touch file="${img.src.dir}/back/image.backuped" />
+	</target>
+	
+	<!--
+		convert rgba png to 8-bit png.
+		Notice:If the image is more the 256 colors,Do this program png image will lossly
+	-->
+	<target name="png.convert" unless="rgbpng.files">
+		<apply executable="pngquant" dest="${img.build.dir}" failonerror="true" parallel="false">
+			<env key= "PATH" path= "${bin.dir}:${env.Path}"/>
+			<filelist dir="${img.build.dir}" files="${rgbpng.files}" />
+			<arg line="-force" />
+			<arg line="256" />
+			<srcfile/>
+			<mapper type="glob" from="*.png" to="*-fs8.png" />
+		</apply>
+		<move todir="${img.build.dir}" overwrite="yes">
+			<fileset dir="${img.build.dir}">
+				<include name="*-fs8.png"/>
+			</fileset>
+			<mapper type="glob" from="*-fs8.png" to="*.png"/>
+		</move>
+	</target>
+	
+	<!--Optimize png images-->
+	<target name="png.opt" depends="init,img.backup">
+		<echo message="Optimizing png images" />
+
+		<copy todir="${img.build.dir}">
+			<fileset dir="${img.src.dir}">
+				<include name="*.png"/>
+			</fileset>
+		</copy>
+		
+		<antcall target="png.convert" />
+		
+		<!--using PKZIP as deflate compressor which is slightly better then zip-->
+		<apply executable="pngout" dest="${img.build.dir}" failonerror="false" parallel="false">
+			<env key= "PATH" path= "${bin.dir}:${env.Path}"/> 
+			<!--alternatively,using filelist-->
+			<fileset dir="${img.build.dir}" includes="*.png" />
+			<arg line="/s0" />
+			<arg line="/f0" />
+			<arg line="/k0" />
+			<arg line="/q" />
+			<arg line="/y" />
+			<srcfile/>
+			<mapper type="glob" from="*.png" to="*-back.png" />
+		</apply>
+		<echo message="Png images optimized." />
+	</target>
+	
+	<!--if property lossly.jpeg is presenting-->
+	<target name="jpg.lossly" depends="init,img.backup" unless="lossly.jpeg">
+		<!--
+		reduce jpeg quality,
+		Simulate the PhotoShop save for web with quality 50%.
+		The luminance and Chrominance of quantization table is not same to PhotoShop did.
+		-->
+		<apply executable="${cmd}" dest="${img.build.dir}" failonerror="true" parallel="false">
+			<env key= "PATH" path= "${bin.dir}:${env.Path}"/> 
+			<!--alternatively,using filelist-->
+			<fileset dir="${img.src.dir}">
+				<include name="*.jpg"/>
+				<include name="*.jpeg"/>
+			</fileset>
+			<arg line="/c" />
+			<arg line="convert" />
+			<srcfile/>
+			<arg line="-quality" />
+			<arg line="81" />
+			<arg line="-strip" />
+			<arg line="-enhance" />
+			<arg line="-sampling-factor" />
+			<arg line="2x2" />
+			<targetfile/>
+			<mapper type="identity"/>
+		</apply>
+		<move todir="${img.src.dir}" overwrite="yes">
+			<fileset dir="${img.build.dir}"/>
+		</move>
+		<mkdir dir="${img.build.dir}" />
+	</target>
+	
+	<!--Optimize jpg images-->
+	<target name="jpg.opt" depends="init,img.backup">
+		<echo message="Optimizing jpeg images" />
+		
+		<antcall target="jpg.lossly" />
+		<!--strip jpeg metadata-->
+		<apply executable="${cmd}" dest="${img.build.dir}" failonerror="true" parallel="false">
+			<env key= "PATH" path= "${bin.dir}:${env.Path}"/>
+			<!--alternatively,using filelist-->
+			<fileset dir="${img.src.dir}">
+				<include name="*.jpg"/>
+				<include name="*.jpeg"/>
+			</fileset>
+			<arg line="/c" />
+			<arg line="jpegtran" />
+			<arg line="-copy" />
+			<arg line="none" />
+			<arg line="-optimize" />
+			<srcfile/>
+			<arg line=">" />
+			<targetfile/>
+			<mapper type="identity"/>				
+		</apply>
+		<echo message="Jpeg images optimized." />
+	</target>
+
+	<!--Optimize gif images-->
+	<target name="gif.opt" depends="init,img.backup">
+		<echo message="Optimizing gif images" />		
+		<!--convert none animated gif to png-->
+		<apply executable="${cmd}" dest="${img.build.dir}" failonerror="true" parallel="false">
+			<env key= "PATH" path= "${bin.dir}:${env.Path}"/>
+			<arg line="/c" />
+			<arg line="${bin.dir}/gif2png" />
+			<srcfile/>
+			<targetfile/>
+			<arg line="${sed.file}" />
+			<fileset dir="${img.src.dir}">
+				<include name="*.gif"/>
+			</fileset>
+			<mapper type="glob" from="*.gif" to="*.png" />
+		</apply>
+		<!--convert gif filename to png filename in css,js,html-->
+		<antcall target="sed.replace">
+			<param name="dest.dir" value="${build.dir}"/>
+			<param name="sed.file" value="${sed.file}"/>
+			<param name="from.dir" value="${src.dir}"/>
+			<param name="refid" value="sources.files"/>
+		</antcall>
+		<!--move changed file to src dir-->
+		<move todir="${src.dir}">
+			<fileset dir="${build.dir}">
+				<patternset refid="sources.files"/>
+			</fileset>
+		</move>
+		<!--optimize animated gif-->
+		<apply executable="${cmd}" dest="${img.build.dir}" failonerror="true" parallel="false">
+			<env key="PATH" path="${bin.dir}:${env.Path}"/>
+			<fileset dir="${img.src.dir}" includes="*.gif" />
+			<arg line="/c" />
+			<arg line="${bin.dir}/gifsicle" />
+			<arg line="-O2" />
+			<srcfile/>
+			<arg line=">" />
+			<targetfile/>
+			<mapper type="identity"/>
+		</apply>
+		<copy todir="${img.src.dir}">
+			<fileset dir="${img.build.dir}">
+				<include name="*.gif"/>
+				<include name="*.png"/>
+			</fileset>
+		</copy>
+		<echo message="Gif images optimized." />
+	</target>
+	
+
+	<target name="img.opt" depends="gif.opt,png.opt,jpg.opt">		
+		<echo message="All images optimized." />				
+	</target>
+
+	<!-- making css using lessc-->
+	<target name="css.make" if="lessc.installed" depends="init">
+		<echo message="Making css" />
+		<apply executable="${cmd}" dest="${css.src.dir}" failonerror="true" parallel="false">
+			<fileset dir="${css.src.dir}" includes="*.less" />
+			<arg line="/c" />
+			<arg line="lessc" />
+			<srcfile/>
+			<targetfile/>
+			<mapper type="glob" from="*.less" to="*.css" />						
+		</apply>
+		<echo message="Css maked." />
+	</target>
+	
+	<!-- concatenates css source files -->
+	<target name="css.concat" depends="init">
+		<echo  message="Building ${css.build.file}" />
+		<concat destfile="${css.build.file}" outputencoding="utf-8">
+			<!--alternatively,using filelist-->
+			<filelist dir="${css.src.dir}" files="${css.concat.files}" />
+		</concat>
+		<copy todir="${css.src.dir}">
+			<fileset dir="${css.build.dir}">
+				<include name="*.css"/>
+			</fileset>
+		</copy>
+		<echo  message="${css.build.file} built." />
+	</target>
+
+	<!-- css sprites -->
+	<target name="css.sprites" depends="css.concat">
+		<echo  message="Building css sprites file ${css.build.file}" />
+		<java classname="org.carrot2.labs.smartsprites.SmartSprites" fork="yes" maxmemory="256m">
+			<arg value="--css-files"/>
+			<arg value="${css.build.file}"/>
+			<classpath refid="smartsprites.path"/>
+  		</java>
+		<move todir="${css.src.dir}">
+			<fileset dir="${css.build.dir}" includes="*-sprite.css" />
+		</move>
+		<delete file="${css.build.file}"/>
+		<echo  message="Css sprites file ${css.build.file} built." />
+	</target>
+
+	<!-- making css dataurl-->
+	<target name="css.embed" depends="css.sprites">
+		<echo message="Embeding css dataurl." />
+		<!--for IE &lt; 8 -->
+		<apply executable="java" dest="${css.build.dir}" failonerror="true" parallel="false">
+			<fileset dir="${css.src.dir}" includes="*-sprite.css" />
+			<arg line="-jar" />
+			<arg line="${cssembed.jar}" />
+			<arg line="--mhtml" />
+			<arg line="--mhtmlroot" />
+			<arg line="${mhtml.root}" />
+			<arg line="--charset" />
+			<arg line="utf-8" />
+			<arg line="-o" />
+			<targetfile/>
+			<srcfile/>
+			<mapper type="glob" from="*.css" to="*-ie.css" />			
+		</apply>
+		<!--for modern browser-->
+		<apply executable="java" dest="${css.build.dir}" failonerror="true" parallel="false">
+			<fileset dir="${css.src.dir}">
+				<include name="*-sprite.css"/>
+			</fileset>
+			<arg line="-jar" />
+			<arg line="${cssembed.jar}" />
+			<arg line="--charset" />
+			<arg line="utf-8" />
+			<arg line="-o" />
+			<targetfile/>
+			<srcfile/>
+			<mapper type="identity"/>
+		</apply>
+		<echo message="Embedded css dataurl" />
+	</target>
+	
+	<!--compress css file -->
+	<target name="css.build" depends="css.embed">
+		<echo message="Building css" />
+		<apply executable="java" parallel="false" failonerror="true" dest="${css.build.dir}">
+			<fileset dir="${css.build.dir}">
+			</fileset>
+			<arg line="-jar" />
+			<arg path="${yuicompressor.jar}" />
+			<arg line="-o" />
+			<targetfile/>
+			<srcfile/>
+			<mapper type="glob" from="*.css" to="-min.css" />			
+		</apply>
+		<echo message="Css built." />
+	</target>
+
+	<!--compress html file -->
+	<target name="html.min" depends="build.dir">
+		<echo message="Building html" />
+		<apply executable="java" parallel="false" failonerror="true" dest="${html.build.dir}">
+			<fileset dir="${html.src.dir}">
+				<include name="*.html"/>
+				<include name="*.htm"/>
+			</fileset>
+			<arg line="-jar" />
+			<arg path="${rhino.jar}" />
+			<arg path="${lib.dir}/html-minifier/build.js" />
+			<srcfile/>
+			<targetfile/>
+			<mapper type="identity"/>
+		</apply>
+		<echo message="Html built." />
+	</target>
+	
+	<!--using sed to replace filename in source file -->
+	<target name="sed.replace">
+		<apply executable="${cmd}" parallel="false" failonerror="true" dest="${dest.dir}">
+			<env key="PATH" path="${bin.dir}:${env.Path}"/> 
+			<fileset dir="${from.dir}">
+				<patternset refid="${refid}"/>
+			</fileset>
+			<arg line="/c" />
+			<arg line="sed" />
+			<arg line="-f" />
+			<arg line="${sed.file}" />
+			<srcfile/>
+			<arg line=">" />
+			<targetfile/>
+			<mapper type="identity"/>
+		</apply>
+		<delete file="${sed.file}"/>
+	</target>
+
+	<!-- document -->
+	<target name="js.doc" depends="init">
+		<jsdoctoolkit jsdochome="${jsdoctoolkit.home}" 
+			template="jsdoc" 
+			outputdir="${build.dir}/docs" 
+			encoding="utf-8">
+			<fileset dir="${js.src.dir}" includes="*.js" />
+		</jsdoctoolkit>
+	</target>
+
+	<!-- test  -->
+	<target name="test.run">
+		<echo message="Running Automated Test Suite" />
+		<java jar="${rhino.jar}" fork="true">
+			<arg value="${lib.dir}/runtest/test.js" />
+		</java>
+		<echo message="Test Suite Finished" />
+	</target>
+
+	<target name="clean">
+		<delete dir="${build.dir}" />
+	</target>
+
+	<!-- local deploy -->
+	<target name="local.deploy"> 
+		<!--copy todir="${local-server.dir}"> 
+			<fileset dir="${js.build.dir}" includes="*.js" /> 
+		</copy--> 
+	</target> 
+
+	<!-- remote deploy use ftp -->
+	<target name="ftp.deploy"> 
+		<!--ftp server="${ftp.server}" 
+			remotedir="${ftp.path}" 
+			userid="${ftp.user}" 
+			password="${ftp.pwd}" 
+			depends="yes" 
+			verbose="yes" 
+			binary="no"> 
+			<fileset dir="${js.build.dir}" includes="*.js"/> 
+		</ftp--> 
+	</target> 
+
+	<!-- remote deploy use ssh -->
+	<target name="ssh.deploy">
+		<!--scp todir="${username}:${password}@${remote-server.host}:${remote-server.dir}"> 
+			<fileset dir="${js.build.dir}" includes="*.js" /> 
+		</scp--> 
+	</target> 
+
+</project>

@@ -1,0 +1,147 @@
+<project  xmlns:ivy="antlib:org.apache.ivy.ant" default="download" basedir=".">
+
+	<import file="${basedir}/ivy/get_ivy.xml"/>
+
+	<property name="lib.dir" value="${basedir}/lib" description="Lib folder"/>
+	<property name="src.dir" value="${basedir}/src" description="Source folder" />
+	<property name="js.src.dir" value="${src.dir}/js" description="Source folder for js"/>
+	<property name="css.src.dir" value="${src.dir}/css" description="Source folder for css"/>
+	<property name="html.src.dir" value="${src.dir}/html" description="Source folder for html"/>
+	<property name="img.src.dir" value="${src.dir}/img" description="Source folder for image"/>
+	<property name="test.src.dir" value="${src.dir}/test" description="Source folder for test" />
+
+	<property name="closure.version" value="20100201"/>
+	<property name="yuicompressor.version" value="2.4.2"/>
+	<property name="jsdoc.version" value="2.3.2"/>
+	<property name="cssembed.version" value="0.3.2"/>
+	<property name="smartsprites.version" value="0.2.6" />
+	<!--version information -->
+	<loadfile property="version" srcfile="version.txt" description="Version to f2e-ant-tool" />
+
+	<!--property name="repository.dir" value="/Local_Repository" /-->
+
+	<available property="jsdoc.installed" file="${ivy.home}/jsdoc_toolkit-${jsdoc.version}.installed"/>
+	<available property="yuicompressor.installed" file="${ivy.home}/yuicompressor-${yuicompressor.version}.installed"/>
+	<available property="closure.installed" file="${ivy.home}/google-closure-${closure.version}.installed"/>
+	<available property="cssembed.installed" file="${ivy.home}/cssembed-${cssembed.version}.installed"/>
+	<available property="smartsprites.installed" file="${ivy.home}/smartsprites-${smartsprites.version}.installed"/>
+	<available property="bin.installed" file="${ivy.home}/bin-${version}.installed"/>
+	<available property="dependencies.installed" file="${basedir}/dependencies.installed"/>
+
+	<!--ivy setting-->
+	<target name="settings-ivy" depends="init-ivy">
+		<ivy:settings file="${basedir}/ivy/ivysettings.xml"/>
+	</target>
+	<target name="resolve-ivy" depends="settings-ivy" unless="dependencies.installed" description="--> retrieve dependencies with ivy">
+		<ivy:retrieve  pattern="${lib.dir}/[artifact]-[revision].[ext]"/>
+	</target>
+	<target name="report-ivy" depends="resolve-ivy">
+		<ivy:report todir="${basedir}/ivy/reports"/>
+	</target>
+
+	<!--update the f2e-ant-tool-->	
+	<target name="update">
+	</target>
+
+	<!--google's closure compiler-->	
+	<target name="get-closure" unless="closure.installed">
+		<mkdir dir="${lib.dir}"/>
+		<get src="http://closure-compiler.googlecode.com/files/compiler-${closure.version}.zip"
+			dest="${ivy.home}/compiler-${closure.version}.zip" usetimestamp="true"/>
+		<unzip src="${ivy.home}/compiler-${closure.version}.zip" dest="${ivy.home}">
+			<patternset>
+				<include name="*.jar"/>
+			</patternset>
+		</unzip>
+		<move todir="${lib.dir}/" file="${ivy.home}/compiler.jar" />
+		<touch file="${ivy.home}/google-closure-${closure.version}.installed"/>
+	</target>
+
+	<!-- YUI compressor -->	
+	<target name="get-yuicompressor" unless="yuicompressor.installed">
+		<get src="http://yuilibrary.com/downloads/yuicompressor/yuicompressor-${yuicompressor.version}.zip"
+			dest="${ivy.home}/yuicompressor-${yuicompressor.version}.zip" usetimestamp="true"/>
+		<unzip src="${ivy.home}/yuicompressor-${yuicompressor.version}.zip" dest="${ivy.home}">
+			<patternset>
+			  <include name="**/build/*.jar"/>
+			</patternset>
+		</unzip>
+		<move todir="${lib.dir}">
+			<fileset dir="${ivy.home}/yuicompressor-${yuicompressor.version}/build/">
+				<include name="**/*.jar"/>
+			</fileset>
+		</move>
+		<delete dir="${ivy.home}/yuicompressor-${yuicompressor.version}"/>
+		<touch file="${ivy.home}/yuicompressor-${yuicompressor.version}.installed"/>
+	</target>
+
+	<!--Nicholas's cssembed which I patched-->	
+	<target name="get-cssembed" unless="cssembed.installed">
+		<get src="http://shihua.googlecode.com/svn/trunck/labs/2010/cssembed/cssembed-${cssembed.version}.jar"
+			dest="${lib.dir}/cssembed-${cssembed.version}.jar" usetimestamp="true"/>
+		<touch file="${ivy.home}/cssembed-${cssembed.version}.installed"/>
+	</target>
+
+	<!--smartsprites-->	
+	<target name="get-smartsprites" unless="smartsprites.installed">
+		<get src="http://csssprites.org/download/smartsprites-${smartsprites.version}.zip"
+			dest="${ivy.home}/smartsprites-${smartsprites.version}.zip" usetimestamp="true"/>
+		<unzip src="${ivy.home}/smartsprites-${smartsprites.version}.zip" dest="${ivy.home}/">
+		</unzip>
+		<move todir="${lib.dir}">
+			<fileset dir="${ivy.home}/smartsprites-${smartsprites.version}/lib">
+				<include name="*.jar"/>
+				<include name="*.LICENSE"/>
+			</fileset>
+		</move>
+		<delete dir="${ivy.home}/smartsprites-${smartsprites.version}"/>
+		<touch file="${ivy.home}/smartsprites-${smartsprites.version}.installed"/>
+	</target>
+
+	<!-- jsdoc toolkit-->	
+	<target name="get-jsdoc" unless="jsdoc.installed">
+		<get src="http://jsdoc-toolkit.googlecode.com/files/jsdoc_toolkit-${jsdoc.version}.zip"
+			dest="${ivy.home}/jsdoc_toolkit-2.3.2.zip" usetimestamp="true"/>
+		<unzip src="${ivy.home}/jsdoc_toolkit-2.3.2.zip" dest="${ivy.home}">
+		</unzip>
+		<move todir="${basedir}">
+			<fileset dir="${ivy.home}/jsdoc_toolkit-${jsdoc.version}/"/>
+		</move>
+		<delete dir="${ivy.home}/jsdoc_toolkit-${jsdoc.version}"/>
+		<touch file="${ivy.home}/jsdoc_toolkit-${jsdoc.version}.installed"/>
+	</target>
+
+	<!--bin and lib-->	
+	<target name="get-bin" unless="bin.installed">
+		<mkdir dir="${ivy.home}/f2e-ant-tools"/>
+		<get src="http://f2e-ant-tools.googlecode.com/svn/trunk/tools/bin-windows-${version}.zip"
+			dest="${ivy.home}/bin-windows-${version}.zip" usetimestamp="true"/>
+		<unzip src="${ivy.home}/bin-windows-${version}.zip" dest="${ivy.home}/f2e-ant-tools"/>
+		<move todir="${basedir}/bin">
+			<fileset dir="${ivy.home}/f2e-ant-tools/bin/" />
+		</move>
+		<get src="http://f2e-ant-tools.googlecode.com/svn/trunk/tools/lib-${version}.zip"
+			dest="${ivy.home}/lib-${version}.zip" usetimestamp="true"/>
+		<unzip src="${ivy.home}/lib-${version}.zip" dest="${ivy.home}/f2e-ant-tools"/>
+		<move todir="${basedir}/lib">
+			<fileset dir="${ivy.home}/f2e-ant-tools/lib/" />
+		</move>
+		<touch file="${ivy.home}/bin-${version}.installed"/>
+	</target>
+
+	<target name="dependencies" depends="get-closure,get-yuicompressor,get-cssembed,get-smartsprites,get-jsdoc,get-bin">
+		<echo message="All dependencies downloaded!" />
+	</target>
+
+	<target name="download" unless="dependencies.installed">
+		<antcall target="resolve-ivy" />
+		<antcall target="dependencies" />
+		<mkdir dir="${js.src.dir}" />
+		<mkdir dir="${css.src.dir}" />
+		<mkdir dir="${html.src.dir}" />
+		<mkdir dir="${test.src.dir}" />
+		<mkdir dir="${img.src.dir}" />
+		<touch file="${basedir}/dependencies.installed"/>		
+	</target>
+
+</project>
